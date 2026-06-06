@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,13 +26,15 @@ func (d *DB) CreateJob(jobType, payload string) (*Job, error) {
 
 func (d *DB) GetJob(id string) (*Job, error) {
 	j := &Job{}
+	var errMsg sql.NullString
 	err := d.Conn.QueryRow(
 		`SELECT id, type, payload, status, attempts, max_attempts, error, created_at, updated_at
 		 FROM jobs WHERE id = ?`, id,
-	).Scan(&j.ID, &j.Type, &j.Payload, &j.Status, &j.Attempts, &j.MaxAttempts, &j.Error, &j.CreatedAt, &j.UpdatedAt)
+	).Scan(&j.ID, &j.Type, &j.Payload, &j.Status, &j.Attempts, &j.MaxAttempts, &errMsg, &j.CreatedAt, &j.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
+	j.Error = errMsg.String
 	return j, nil
 }
 
@@ -48,7 +51,9 @@ func (d *DB) GetAllJobs() ([]Job, error) {
 	var jobs []Job
 	for rows.Next() {
 		var j Job
-		rows.Scan(&j.ID, &j.Type, &j.Payload, &j.Status, &j.Attempts, &j.MaxAttempts, &j.Error, &j.CreatedAt, &j.UpdatedAt)
+		var errMsg sql.NullString
+		rows.Scan(&j.ID, &j.Type, &j.Payload, &j.Status, &j.Attempts, &j.MaxAttempts, &errMsg, &j.CreatedAt, &j.UpdatedAt)
+		j.Error = errMsg.String
 		jobs = append(jobs, j)
 	}
 	return jobs, nil
@@ -67,7 +72,9 @@ func (d *DB) GetFailedJobs() ([]Job, error) {
 	var jobs []Job
 	for rows.Next() {
 		var j Job
-		rows.Scan(&j.ID, &j.Type, &j.Payload, &j.Status, &j.Attempts, &j.MaxAttempts, &j.Error, &j.CreatedAt, &j.UpdatedAt)
+		var errMsg sql.NullString
+		rows.Scan(&j.ID, &j.Type, &j.Payload, &j.Status, &j.Attempts, &j.MaxAttempts, &errMsg, &j.CreatedAt, &j.UpdatedAt)
+		j.Error = errMsg.String
 		jobs = append(jobs, j)
 	}
 	return jobs, nil

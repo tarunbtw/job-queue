@@ -2,7 +2,7 @@
 
 A background job processing system written in Go. Accepts jobs over HTTP, queues them in Redis, and processes them asynchronously with automatic retries, exponential backoff, and a dead letter queue.
 
-This is the pattern behind Sidekiq, BullMQ, and Faktory — built from scratch.
+Follows the pattern behind Sidekiq, BullMQ, and Faktory.
 
 ---
 

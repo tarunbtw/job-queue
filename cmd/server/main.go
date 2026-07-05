@@ -24,15 +24,33 @@ func main() {
 		dbPath = "jobs.db"
 	}
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
 	database := db.New(dbPath)
 	q := queue.New()
 	s := &Server{db: database, queue: q}
 
-	http.HandleFunc("/jobs", s.handleJobs)
-	http.HandleFunc("/jobs/", s.handleJobActions)
+	mux := http.NewServeMux()
 
-	log.Println("server listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	// Specific API routes registered first
+	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/jobs", s.handleJobs)
+	mux.HandleFunc("/jobs/", s.handleJobActions)
+
+	// Static dashboard at /
+	mux.Handle("/", http.FileServer(http.Dir("dashboard")))
+
+	addr := ":" + port
+	log.Printf("server listening on %s", addr)
+	log.Fatal(http.ListenAndServe(addr, mux))
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
 
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {

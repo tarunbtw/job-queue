@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Queue Dashboard</title>
+  <meta name="description" content="Monitor and manage background jobs — submit, track status, and retry failed jobs." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #ffffff;
+      --bg-subtle:  #f9f9f9;
+      --border:     #e4e4e7;
+      --text:       #09090b;
+      --text-muted: #71717a;
+      --ring:       #18181b;
+      --radius:     6px;
+      --shadow:     0 1px 3px rgba(0,0,0,.08);
+    }
+    [data-theme="dark"] {
+      --bg:         #09090b;
+      --bg-subtle:  #111113;
+      --border:     #27272a;
+      --text:       #fafafa;
+      --text-muted: #71717a;
+      --ring:       #d4d4d8;
+      --shadow:     0 1px 3px rgba(0,0,0,.4);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      height: 56px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 600; font-size: 15px; letter-spacing: -.01em;
+    }
+    .logo svg { opacity: .8; }
+    main { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 600; font-size: 14px;
+    }
+    .card-body { padding: 20px; }
+
+    /* ── Form ── */
+    .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: 12px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+    select, input[type="text"], textarea {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      padding: 7px 10px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    select:focus, input[type="text"]:focus, textarea:focus {
+      border-color: var(--ring);
+    }
+    textarea { resize: vertical; min-height: 72px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+    select { cursor: pointer; }
+    .fg-type  { flex: 0 0 140px; }
+    .fg-payload { flex: 1 1 260px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: none; border-radius: var(--radius);
+      font-family: inherit; font-size: 13px; font-weight: 500;
+      padding: 7px 14px; cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn-primary {
+      background: var(--text);
+      color: var(--bg);
+    }
+    .btn-primary:hover { opacity: .85; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--text); }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* ── Theme toggle ── */
+    #theme-toggle {
+      background: none; border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 6px;
+      cursor: pointer; color: var(--text-muted);
+      display: flex; align-items: center;
+      transition: color .15s, border-color .15s;
+    }
+    #theme-toggle:hover { color: var(--text); border-color: var(--text); }
+
+    /* ── Status badge ── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+    /* shapes by status — monochrome only */
+    .s-pending   .badge-dot { background: var(--text-muted); }
+    .s-processing .badge-dot { background: var(--text); animation: pulse 1.2s infinite; }
+    .s-completed .badge-dot { background: var(--text); clip-path: none; }
+    .s-failed    .badge-dot { background: var(--text); border-radius: 2px; }
+
+    .s-pending   .badge { border-style: dashed; }
+    .s-processing .badge { border-style: solid; }
+    .s-completed .badge { border-style: solid; background: var(--bg-subtle); }
+    .s-failed    .badge { border-style: solid; border-color: var(--text); color: var(--text); }
+
+    @keyframes pulse {
+      0%,100% { opacity: 1; } 50% { opacity: .3; }
+    }
+
+    /* ── Table ── */
+    .section-title {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 28px 0 12px;
+    }
+    .section-title h2 { font-size: 14px; font-weight: 600; }
+    .section-title .poll-indicator {
+      font-size: 11px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .poll-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--text-muted);
+    }
+    .poll-dot.active { background: var(--text); animation: pulse .8s infinite; }
+
+    .tbl-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left; padding: 8px 12px;
+      font-size: 11px; font-weight: 500;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--bg-subtle); }
+    .job-id { font-family: monospace; font-size: 11px; color: var(--text-muted); }
+    .job-type { font-weight: 500; }
+
+    /* ── Empty state ── */
+    .empty {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 56px 24px; gap: 10px;
+      color: var(--text-muted); text-align: center;
+    }
+    .empty svg { opacity: .4; }
+    .empty p { font-size: 13px; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--text); color: var(--bg);
+      padding: 10px 16px; border-radius: var(--radius);
+      font-size: 13px; font-weight: 500;
+      box-shadow: 0 4px 16px rgba(0,0,0,.2);
+      transform: translateY(8px); opacity: 0;
+      transition: opacity .2s, transform .2s;
+      pointer-events: none; z-index: 100;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ── Misc ── */
+    .gap-top { margin-top: 12px; }
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid var(--border); border-top-color: var(--text);
+      border-radius: 50%; animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12a9 9 0 1 1 18 0 9 9 0 0 1-18 0"/>
+      <path d="M12 8v4l2 2"/>
+    </svg>
+    Job Queue
+  </div>
+  <button id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
+    <svg id="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+      <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+    </svg>
+    <svg id="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+  </button>
+</header>
+
+<main>
+  <!-- Submit form -->
+  <div class="card">
+    <div class="card-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+      </svg>
+      Submit Job
+    </div>
+    <div class="card-body">
+      <form id="job-form">
+        <div class="form-row">
+          <div class="form-group fg-type">
+            <label for="job-type">Type</label>
+            <select id="job-type" name="type">
+              <option value="email">email</option>
+              <option value="report">report</option>
+              <option value="fail">fail</option>
+            </select>
+          </div>
+          <div class="form-group fg-payload">
+            <label for="job-payload">Payload (JSON)</label>
+            <textarea id="job-payload" name="payload" placeholder='{"to": "user@example.com"}'></textarea>
+          </div>
+        </div>
+        <div class="gap-top">
+          <button type="submit" id="submit-btn" class="btn btn-primary">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+            Submit
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Jobs table -->
+  <div class="section-title">
+    <h2>Jobs</h2>
+    <div class="poll-indicator">
+      <span class="poll-dot" id="poll-dot"></span>
+      <span id="poll-label">Polling every 4s</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="tbl-wrap">
+      <table id="jobs-table">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Type</th>
+            <th>ID</th>
+            <th>Attempts</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="jobs-body">
+          <tr><td colspan="6"><div class="empty"><span class="spinner"></span></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+  // ── Theme ──
+  const html = document.documentElement;
+  const sun  = document.getElementById('icon-sun');
+  const moon = document.getElementById('icon-moon');
+
+  function applyTheme(t) {
+    html.setAttribute('data-theme', t);
+    sun.style.display  = t === 'dark' ? 'block' : 'none';
+    moon.style.display = t === 'dark' ? 'none'  : 'block';
+  }
+  const stored = localStorage.getItem('theme');
+  const pref   = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  applyTheme(stored || pref);
+
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    localStorage.setItem('theme', next);
+  });
+
+  // ── Toast ──
+  let toastTimer;
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  // ── Helpers ──
+  function relTime(iso) {
+    const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+    if (s < 60) return `${s}s ago`;
+    if (s < 3600) return `${Math.floor(s/60)}m ago`;
+    return `${Math.floor(s/3600)}h ago`;
+  }
+
+  function statusIcon(status) {
+    switch (status) {
+      case 'pending':
+        return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+      case 'processing':
+        return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"/></svg>`;
+      case 'completed':
+        return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      case 'failed':
+        return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+      default: return '';
+    }
+  }
+
+  // ── Fetch & render jobs ──
+  async function fetchJobs() {
+    const dot = document.getElementById('poll-dot');
+    dot.classList.add('active');
+    try {
+      const res  = await fetch('/jobs');
+      const jobs = await res.json();
+      renderJobs(Array.isArray(jobs) ? jobs : []);
+    } catch(e) {
+      // silently ignore transient errors
+    } finally {
+      setTimeout(() => dot.classList.remove('active'), 400);
+    }
+  }
+
+  function renderJobs(jobs) {
+    const tbody = document.getElementById('jobs-body');
+    if (!jobs.length) {
+      tbody.innerHTML = `<tr><td colspan="6">
+        <div class="empty">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>
+          </svg>
+          <p>No jobs yet. Submit one above.</p>
+        </div>
+      </td></tr>`;
+      return;
+    }
+
+    // sort: newest first
+    jobs.sort((a,b) => new Date(b.CreatedAt) - new Date(a.CreatedAt));
+
+    tbody.innerHTML = jobs.map(j => {
+      const sc = `s-${j.Status}`;
+      const retryBtn = j.Status === 'failed'
+        ? `<button class="btn btn-ghost btn-sm" onclick="retryJob('${j.ID}')">
+             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+             Retry
+           </button>`
+        : '';
+      return `<tr class="${sc}">
+        <td><span class="badge"><span class="badge-dot"></span>${statusIcon(j.Status)} ${j.Status}</span></td>
+        <td class="job-type">${j.Type}</td>
+        <td class="job-id">${j.ID}</td>
+        <td>${j.Attempts} / ${j.MaxAttempts}</td>
+        <td style="color:var(--text-muted)">${relTime(j.CreatedAt)}</td>
+        <td>${retryBtn}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Retry ──
+  async function retryJob(id) {
+    try {
+      const res = await fetch(`/jobs/${id}/retry`, { method: 'POST' });
+      if (res.ok) {
+        showToast('Job requeued successfully.');
+        fetchJobs();
+      } else {
+        showToast('Retry failed — check server logs.');
+      }
+    } catch {
+      showToast('Network error.');
+    }
+  }
+
+  // ── Submit ──
+  document.getElementById('job-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const type    = document.getElementById('job-type').value;
+    const rawPay  = document.getElementById('job-payload').value.trim();
+    let payload   = {};
+    if (rawPay) {
+      try { payload = JSON.parse(rawPay); }
+      catch { showToast('Payload is not valid JSON.'); return; }
+    }
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Submitting…';
+    try {
+      const res = await fetch('/jobs', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ type, payload }),
+      });
+      if (res.ok) {
+        showToast('Job submitted.');
+        document.getElementById('job-payload').value = '';
+        fetchJobs();
+      } else {
+        showToast('Submit failed — check server logs.');
+      }
+    } catch {
+      showToast('Network error.');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Submit`;
+    }
+  });
+
+  // ── Poll ──
+  fetchJobs();
+  setInterval(fetchJobs, 4000);
+</script>
+</body>
+</html>
